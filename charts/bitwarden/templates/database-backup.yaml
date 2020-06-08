@@ -12,16 +12,16 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   schedule: {{ .Values.backup.schedule | quote }}
+  # Disallow concurrency if writing the same file
+  {{ if .Values.backup.timestamp -}}
+  concurrencyPolicy: Allow
+  {{ else }}
+  concurrencyPolicy: Forbid
+  {{ end }}
   jobTemplate:
     spec:
       template:
         spec:
-          # Disallow concurrency if writing the same file
-          {{ if .Values.backup.timestamp -}}
-          concurrencyPolicy: Allow
-          {{ else }}
-          concurrencyPolicy: Forbid
-          {{ end }}
           containers:
           - name: {{ $fullName }}-database-backup
             image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag }}"
@@ -40,6 +40,8 @@ spec:
               name: data-storage
             - mountPath: {{ .Values.backup.path }}
               name: backup-storage
+            resources:
+              {{- toYaml .Values.backup.resources | nindent 14 }}
           volumes:
           - name: data-storage
             persistentVolumeClaim:
@@ -48,8 +50,6 @@ spec:
             persistentVolumeClaim:
               claimName: {{ $fullName }}-backup-pv
           restartPolicy: OnFailure
-          resources:
-            {{- toYaml .Values.backup.resources | nindent 12 }}
           {{- with .Values.backup.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 8 }}
